@@ -17,6 +17,22 @@ jobs:
       with:
         go-version-file: './go.mod'
 
-    
+    # List go version
     - name: List version
       run: go version
+
+    # Run build of the application
+    - name: Run build
+      run: go build . 
+
+    # Format code base to meet `go fmt` standard
+    - name: Format code
+      run: go fmt
+
+    # Vet code
+    - name: Run vet
+      run: go vet .
+      
+    # Run testing on the code
+    - name: Run tests
+      run: go test -v
