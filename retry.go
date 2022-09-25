@@ -7,25 +7,29 @@ import (
 type retryableFunction[T any] func() (T, error)
 
 type retryPolicy interface {
-	stop() bool
+	stop(int) bool
 	delay() time.Duration
 }
 
 type SimpleRetryPolicy struct {
 	MaxAttempts int
 	Interval    time.Duration
-	count       int
 }
 
 func (srp *SimpleRetryPolicy) delay() time.Duration {
 	return srp.Interval
 }
 
-func (srp *SimpleRetryPolicy) stop() bool {
-	srp.count++
-	return srp.count >= srp.MaxAttempts
+func (srp *SimpleRetryPolicy) stop(count int) bool {
+	return count >= srp.MaxAttempts
 }
 
+type RetryTemplate[T any] struct {
+  retryPolicy retryPolicy
+  count int
+}
+
+/*
 func Execute[T any](rp retryPolicy, fn retryableFunction[T]) (T, error) {
 	var val T
 	var err error
@@ -39,4 +43,22 @@ func Execute[T any](rp retryPolicy, fn retryableFunction[T]) (T, error) {
 		time.Sleep(rp.delay())
 	}
 	return val, err
+}
+*/
+
+func (rt *RetryTemplate[T]) execute(fn retryableFunction[T]) (T, error) {
+  var val T
+  var err error
+  
+  stop := false
+	for !stop {
+		stop = rt.retryPolicy.stop(rt.count)
+		val, err = fn()
+		if err == nil {
+			break
+		}
+		time.Sleep(rt.retryPolicy.delay())
+	}
+
+  return val, err
 }
