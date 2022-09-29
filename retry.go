@@ -6,59 +6,57 @@ import (
 
 type retryableFunction[T any] func() (T, error)
 
+// TODO add state enum, isclosed/exhausted, channel for interrupt
+type retryContext struct {
+	count     int
+	lastError error
+}
+
 type retryPolicy interface {
-	stop(int) bool
+	stop(*retryContext) bool
 	delay() time.Duration
 }
 
-type SimpleRetryPolicy struct {
-	MaxAttempts int
-	Interval    time.Duration
-}
-
-func (srp *SimpleRetryPolicy) delay() time.Duration {
-	return srp.Interval
-}
-
-func (srp *SimpleRetryPolicy) stop(count int) bool {
-	return count >= srp.MaxAttempts
-}
-
+// TODO add onerror, onopen, onclose callbacks
+// TODO move context to the policy? Maybe not.
 type RetryTemplate[T any] struct {
-  retryPolicy retryPolicy
-  count int
+	rp retryPolicy
+	rc retryContext
 }
 
-/*
-func Execute[T any](rp retryPolicy, fn retryableFunction[T]) (T, error) {
+func (rt *RetryTemplate[T]) Execute(fn retryableFunction[T]) (T, error) {
+	rc := retryContext{
+		count:     0,
+		lastError: nil,
+	}
+
+	rt.rc = rc
 	var val T
 	var err error
-	stop := false
-	for !stop {
-		stop = rp.stop()
+
+	for !rt.rp.stop(&rt.rc) {
 		val, err = fn()
 		if err == nil {
 			break
 		}
-		time.Sleep(rp.delay())
+		rt.rc.count++
+		rt.rc.lastError = err
+		time.Sleep(rt.rp.delay())
 	}
 	return val, err
 }
+
+/*
+Simple Retry Policy impl
 */
+type SimpleRetryPolicy struct {
+	MaxAttempts int
+}
 
-func (rt *RetryTemplate[T]) execute(fn retryableFunction[T]) (T, error) {
-  var val T
-  var err error
-  
-  stop := false
-	for !stop {
-		stop = rt.retryPolicy.stop(rt.count)
-		val, err = fn()
-		if err == nil {
-			break
-		}
-		time.Sleep(rt.retryPolicy.delay())
-	}
+func (srp SimpleRetryPolicy) delay() time.Duration {
+	return 0
+}
 
-  return val, err
+func (srp SimpleRetryPolicy) stop(rc *retryContext) bool {
+	return rc.count >= srp.MaxAttempts
 }
