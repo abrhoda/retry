@@ -3,35 +3,34 @@ package retry
 import (
 	"errors"
 	"testing"
-	"time"
 )
 
-func TestRetryExecute(t *testing.T) {
-	t.Run("Returns value T", func(t *testing.T) {
-		srp := SimpleRetryPolicy{
-			MaxAttempts: 1,
-			Interval:    0,
-			count:       0,
+func TestRetryTemplate(t *testing.T) {
+	t.Run("Execute returns value T", func(t *testing.T) {
+		maxAttempts := 1
+		policy := SimpleRetryPolicy{
+			MaxAttempts: maxAttempts,
 		}
-		ret_val := "desired return value"
-		got, err := Execute(
-			&srp,
-			func() (string, error) {
-				return "desired return value", nil
+
+		template := createRetryTemplate[int](policy)
+		want := 1
+		got, err := template.Execute(
+			func() (int, error) {
+				return 1, nil
 			},
 		)
-		assertEqual(t, got, ret_val)
+		assertEqual(t, got, want)
 		assertNil(t, err)
 	})
 
-	t.Run("Returns error", func(t *testing.T) {
-		srp := SimpleRetryPolicy{
-			MaxAttempts: 1,
-			Interval:    0,
-			count:       0,
+	t.Run("Execute returns error", func(t *testing.T) {
+		maxAttempts := 1
+		policy := SimpleRetryPolicy{
+			MaxAttempts: maxAttempts,
 		}
-		_, err := Execute(
-			&srp,
+
+		template := createRetryTemplate[int](policy)
+		_, err := template.Execute(
 			func() (int, error) {
 				return 0, errors.New("Error from `Returns error`")
 			},
@@ -40,74 +39,109 @@ func TestRetryExecute(t *testing.T) {
 		assertError(t, err)
 	})
 
-	t.Run("Increases count on each attempt", func(t *testing.T) {
-		maxAttempts := 5
-		srp := SimpleRetryPolicy{
-			MaxAttempts: maxAttempts,
-			Interval:    0,
-			count:       0,
-		}
-		want_count := 3
-		want_string := "want_string"
+}
 
-		got, _ := Execute(
-			&srp,
-			func() (string, error) {
-				if srp.count < want_count {
-					return "", errors.New("Error from `Returns error`")
+func TestRetryContext(t *testing.T) {
+	t.Run("Increases count on each retry attempt", func(t *testing.T) {
+		maxAttempts := 5
+		policy := SimpleRetryPolicy{
+			MaxAttempts: maxAttempts,
+		}
+
+		template := createRetryTemplate[int](policy)
+
+		want_count := 3
+
+		template.Execute(
+			func() (int, error) {
+				if template.rc.count < want_count {
+					return 0, errors.New("Error from `Returns error`")
 				} else {
-					return want_string, nil
+					return 1, nil
 				}
 			},
 		)
-		assertEqual(t, srp.count, want_count)
-		assertEqual(t, got, want_string)
+		assertEqual(t, template.rc.count, want_count)
 	})
 
-	t.Run("Stops at MaxAttempts", func(t *testing.T) {
-		maxAttempts := 5
-		srp := SimpleRetryPolicy{
+	t.Run("Sets lastError on the context on failure attempt", func(t *testing.T) {
+		maxAttempts := 1
+		policy := SimpleRetryPolicy{
 			MaxAttempts: maxAttempts,
-			Interval:    0,
-			count:       0,
 		}
-		Execute(
-			&srp,
+
+		template := createRetryTemplate[int](policy)
+
+		_, err := template.Execute(
 			func() (int, error) {
 				return 0, errors.New("Error from `Returns error`")
 			},
 		)
-		want := maxAttempts
-		assertEqual(t, srp.count, want)
-	})
 
-	t.Run("Waits for delay between attempts", func(t *testing.T) {
-		maxAttempts := 5
-		interval := 200 * time.Millisecond // ms
-		totalTime := time.Duration(maxAttempts) * interval
-
-		srp := SimpleRetryPolicy{
-			MaxAttempts: maxAttempts,
-			Interval:    interval,
-			count:       0,
-		}
-
-		start := time.Now()
-		Execute(
-			&srp,
-			func() (int, error) {
-				return 0, errors.New("Error from `Returns error`")
-			},
-		)
-		elapsed := time.Since(start)
-
-		if totalTime > elapsed {
-			t.Error("Elapsed should take longer than total delay.")
-		}
-
+		assertError(t, err)
 	})
 }
 
+/* THIS IS A SIMPLERETRYPOLICY TEST */
+func TestSimpleRetryPolicy(t *testing.T) {
+	t.Run("Sends stop boolean at maxAttempts", func(t *testing.T) {
+		maxAttempts := 1
+		policy := SimpleRetryPolicy{
+			MaxAttempts: maxAttempts,
+		}
+
+		context := retryContext{
+			count:     maxAttempts,
+			lastError: nil,
+		}
+
+		stop := policy.stop(&context)
+		assertTrue(t, stop)
+	})
+
+	t.Run("Execute stops at MaxAttempts", func(t *testing.T) {
+		maxAttempts := 5
+		srp := SimpleRetryPolicy{
+			MaxAttempts: maxAttempts,
+		}
+
+		template := createRetryTemplate[int](srp)
+		template.Execute(
+			func() (int, error) {
+				return 0, errors.New("Error from `Returns error`")
+			},
+		)
+
+		want := maxAttempts
+		assertEqual(t, template.rc.count, want)
+	})
+}
+
+func createRetryTemplate[T any](rp retryPolicy) RetryTemplate[T] {
+	context := retryContext{
+		count:     0,
+		lastError: nil,
+	}
+
+	return RetryTemplate[T]{
+		rp: rp,
+		rc: context,
+	}
+}
+
+func assertTrue(t testing.TB, check bool) {
+	t.Helper()
+	if !check {
+		t.Errorf("check is false")
+	}
+}
+
+func assertFalse(t testing.TB, check bool) {
+	t.Helper()
+	if check {
+		t.Errorf("check is true")
+	}
+}
 func assertEqual[C comparable](t testing.TB, got C, want C) {
 	t.Helper()
 	if got != want {
@@ -118,13 +152,13 @@ func assertEqual[C comparable](t testing.TB, got C, want C) {
 func assertError(t testing.TB, err error) {
 	t.Helper()
 	if err == nil {
-		t.Error("Error is nil")
+		t.Error("error is nil")
 	}
 }
 
 func assertNil(t testing.TB, err error) {
 	t.Helper()
 	if err != nil {
-		t.Error("Error is not nil")
+		t.Error("error is not nil")
 	}
 }
