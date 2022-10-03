@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: check repository
-    - uses: actions/checkout@v3
+    - name: Checkout repository code
+      uses: actions/checkout@v3
     
     - name: Setup Go
       uses: actions/setup-go@v3
@@ -21,10 +21,6 @@ jobs:
     # List go version
     - name: List version
       run: go version
-
-    # Run build of the application
-    - name: Run build
-      run: make build 
 
     # Format code base to meet `go fmt` standard.
     - name: Format code
@@ -38,9 +34,10 @@ jobs:
     - name: Run tests
       run: make test
 
+    # Check test coverage above minimum threshold
     - name: Run code coverage
       env:
-        MINIMUM_THRESHOLD: 80.00
+        MINIMUM_THRESHOLD: 90.00
       run: |
         echo "Code coverage check. Ensure code coverage is above $MINIMUM_THRESHOLD %"
         current=`go tool cover -func=coverage.out | grep total | grep -Eo '[0-9]+\.[0-9]+'` 
@@ -50,4 +47,9 @@ jobs:
         else
           echo "[FAILED] Code coverage below threshold."
         fi
+
+    # Run build of the application
+    - name: Run build
+      run: make build 
+
 
