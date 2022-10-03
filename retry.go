@@ -5,6 +5,9 @@ import (
 )
 
 type retryableFunction[T any] func() (T, error)
+type onOpenCallbackFunction func()
+type onErrorCallbackFunction func(error)
+type onCloseCallbackFunction[T any] func(T, error)
 
 // TODO add state enum, isclosed/exhausted, channel for interrupt
 type retryContext struct {
@@ -17,11 +20,24 @@ type retryPolicy interface {
 	delay() time.Duration
 }
 
-// TODO add onerror, onopen, onclose callbacks
-// TODO move context to the policy? Maybe not.
 type RetryTemplate[T any] struct {
-	rp retryPolicy
-	rc retryContext
+	rp      retryPolicy
+	rc      retryContext
+	onOpen  onOpenCallbackFunction
+	onClose onCloseCallbackFunction[T]
+	onError onErrorCallbackFunction
+}
+
+func (rt *RetryTemplate[T]) setOnOpenCallback(fn onOpenCallbackFunction) {
+	rt.onOpen = fn
+}
+
+func (rt *RetryTemplate[T]) setOnCloseCallback(fn onCloseCallbackFunction[T]) {
+	rt.onClose = fn
+}
+
+func (rt *RetryTemplate[T]) setOnErrorCallback(fn onErrorCallbackFunction) {
+	rt.onError = fn
 }
 
 func (rt *RetryTemplate[T]) Execute(fn retryableFunction[T]) (T, error) {
@@ -34,15 +50,30 @@ func (rt *RetryTemplate[T]) Execute(fn retryableFunction[T]) (T, error) {
 	var val T
 	var err error
 
+	if rt.onOpen != nil {
+		rt.onOpen()
+	}
+
 	for !rt.rp.stop(&rt.rc) {
+		rt.rc.count++
+
 		val, err = fn()
 		if err == nil {
 			break
 		}
-		rt.rc.count++
+
 		rt.rc.lastError = err
+		if rt.onError != nil {
+			rt.onError(err)
+		}
+
 		time.Sleep(rt.rp.delay())
 	}
+
+	if rt.onClose != nil {
+		rt.onClose(val, err)
+	}
+
 	return val, err
 }
 

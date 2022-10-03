@@ -20,7 +20,7 @@ func TestRetryTemplate(t *testing.T) {
 			},
 		)
 		assertEqual(t, got, want)
-		assertNil(t, err)
+		assertErrorNil(t, err)
 	})
 
 	t.Run("Execute returns error", func(t *testing.T) {
@@ -36,7 +36,7 @@ func TestRetryTemplate(t *testing.T) {
 			},
 		)
 
-		assertError(t, err)
+		assertErrorNotNil(t, err)
 	})
 
 }
@@ -72,13 +72,13 @@ func TestRetryContext(t *testing.T) {
 
 		template := createRetryTemplate[int](policy)
 
-		_, err := template.Execute(
+		template.Execute(
 			func() (int, error) {
 				return 0, errors.New("Error from `Returns error`")
 			},
 		)
 
-		assertError(t, err)
+		assertErrorNotNil(t, template.rc.lastError)
 	})
 }
 
@@ -117,6 +117,87 @@ func TestSimpleRetryPolicy(t *testing.T) {
 	})
 }
 
+func TestSimpleRetryPolicyCallbacks(t *testing.T) {
+	t.Run("Pass through when no callbacks are set", func(t *testing.T) {
+		maxAttempts := 5
+		policy := SimpleRetryPolicy{
+			MaxAttempts: maxAttempts,
+		}
+
+		template := createRetryTemplate[int](policy)
+
+		assertCallbackNil[int](t, template.onOpen)
+		assertCallbackNil[int](t, template.onError)
+		assertCallbackNil[int](t, template.onClose)
+	})
+
+	t.Run("Calls onOpen when it's set at the beginning only", func(t *testing.T) {
+		var opened bool
+
+		openFunc := func() {
+			opened = true
+		}
+
+		maxAttempts := 1
+		policy := SimpleRetryPolicy{
+			MaxAttempts: maxAttempts,
+		}
+
+		template := createRetryTemplate[int](policy)
+		template.setOnOpenCallback(openFunc)
+		template.Execute(
+			func() (int, error) {
+				return 1, nil
+			},
+		)
+		assertTrue(t, opened)
+
+	})
+
+	t.Run("Calls onError when it's set on every failed attempt", func(t *testing.T) {
+		var total int
+
+		errorFunc := func(e error) {
+			total++
+		}
+
+		maxAttempts := 5
+		policy := SimpleRetryPolicy{
+			MaxAttempts: maxAttempts,
+		}
+
+		template := createRetryTemplate[int](policy)
+		template.setOnErrorCallback(errorFunc)
+		template.Execute(
+			func() (int, error) {
+				return 0, errors.New("Error from `Returns error`")
+			},
+		)
+		assertEqual(t, total, maxAttempts)
+	})
+
+	t.Run("Calls onClose when it's set at the end only", func(t *testing.T) {
+		var closed bool
+
+		closeFunc := func(i int, e error) {
+			closed = true
+		}
+
+		maxAttempts := 5
+		policy := SimpleRetryPolicy{
+			MaxAttempts: maxAttempts,
+		}
+
+		template := createRetryTemplate[int](policy)
+		template.setOnCloseCallback(closeFunc)
+		template.Execute(
+			func() (int, error) {
+				return 1, nil
+			},
+		)
+		assertTrue(t, closed)
+	})
+}
 func createRetryTemplate[T any](rp retryPolicy) RetryTemplate[T] {
 	context := retryContext{
 		count:     0,
@@ -149,16 +230,34 @@ func assertEqual[C comparable](t testing.TB, got C, want C) {
 	}
 }
 
-func assertError(t testing.TB, err error) {
+func assertErrorNotNil(t testing.TB, err error) {
 	t.Helper()
 	if err == nil {
 		t.Error("error is nil")
 	}
 }
 
-func assertNil(t testing.TB, err error) {
+func assertErrorNil(t testing.TB, err error) {
 	t.Helper()
 	if err != nil {
 		t.Error("error is not nil")
+	}
+}
+
+type Callback[T any] interface {
+	onOpenCallbackFunction | onErrorCallbackFunction | onCloseCallbackFunction[T]
+}
+
+func assertCallbackNil[T any, C Callback[T]](t testing.TB, fn C) {
+	t.Helper()
+	if fn != nil {
+		t.Error("Callback was not nil")
+	}
+}
+
+func assertCallbackNotNil[T any, C Callback[T]](t testing.TB, fn C) {
+	t.Helper()
+	if fn == nil {
+		t.Error("Callback was nil")
 	}
 }
