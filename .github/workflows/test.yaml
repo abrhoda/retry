@@ -10,7 +10,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout repository code
+      uses: actions/checkout@v3
     
     - name: Setup Go
       uses: actions/setup-go@v3
@@ -21,18 +22,34 @@ jobs:
     - name: List version
       run: go version
 
-    # Run build of the application
-    - name: Run build
-      run: go build . 
-
-    # Format code base to meet `go fmt` standard
+    # Format code base to meet `go fmt` standard.
     - name: Format code
-      run: go fmt
+      run: make format
 
-    # Vet code
+    # Run vet (this runs as part of go test too - could be removed)
     - name: Run vet
-      run: go vet .
+      run: go vet ./...
       
     # Run testing on the code
     - name: Run tests
-      run: go test -v
+      run: make test
+
+    # Check test coverage above minimum threshold
+    - name: Run code coverage
+      env:
+        MINIMUM_THRESHOLD: 90.00
+      run: |
+        echo "Code coverage check. Ensure code coverage is above $MINIMUM_THRESHOLD %"
+        current=`go tool cover -func=coverage.out | grep total | grep -Eo '[0-9]+\.[0-9]+'` 
+        echo "Current test coverage is $current %"
+        if (( $(echo "$current $MINIMUM_THRESHOLD" | awk '{print ($1 > $2)}') )); then
+          echo "[PASSED] Code coverage above threshold."
+        else
+          echo "[FAILED] Code coverage below threshold."
+        fi
+
+    # Run build of the application
+    - name: Run build
+      run: make build 
+
+
