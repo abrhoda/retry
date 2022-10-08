@@ -3,6 +3,7 @@ package retry
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestRetryTemplate(t *testing.T) {
@@ -82,7 +83,6 @@ func TestRetryContext(t *testing.T) {
 	})
 }
 
-/* THIS IS A SIMPLERETRYPOLICY TEST */
 func TestSimpleRetryPolicy(t *testing.T) {
 	t.Run("Sends stop boolean at maxAttempts", func(t *testing.T) {
 		maxAttempts := 1
@@ -117,7 +117,56 @@ func TestSimpleRetryPolicy(t *testing.T) {
 	})
 }
 
-func TestSimpleRetryPolicyCallbacks(t *testing.T) {
+func TestFixedBackoffPolicy(t *testing.T) {
+	t.Run("Waits `BackoffPeriod` miliseconds between reties", func(t *testing.T) {
+		delay := 1000 * time.Millisecond
+		policy := FixedBackoffPolicy{
+			BackoffPeriod: delay,
+			Limit:         30000 * time.Millisecond,
+		}
+
+		assertEqual(t, policy.delay(), delay)
+	})
+
+	t.Run("Retries until Limit is reached", func(t *testing.T) {
+		delay := 1000 * time.Millisecond
+		policy := FixedBackoffPolicy{
+			BackoffPeriod: delay,
+			Limit:         5000 * time.Millisecond,
+		}
+
+		context := retryContext{
+			count:     0,
+			lastError: nil,
+		}
+
+		stop := policy.stop(&context)
+		assertFalse(t, stop)
+
+		context.count = 5
+
+		stop = policy.stop(&context)
+		assertTrue(t, stop)
+	})
+	t.Run("Uses a default `Limit` if none is set", func(t *testing.T) {
+		delay := 1000 * time.Millisecond
+		policy := FixedBackoffPolicy{
+			BackoffPeriod: delay,
+		}
+
+		context := retryContext{
+			count:     0,
+			lastError: nil,
+		}
+
+		context.count = 30
+
+		stop := policy.stop(&context)
+		assertTrue(t, stop)
+	})
+}
+
+func TestRetryTemplateCallbacks(t *testing.T) {
 	t.Run("Pass through when no callbacks are set", func(t *testing.T) {
 		maxAttempts := 5
 		policy := SimpleRetryPolicy{
@@ -198,6 +247,8 @@ func TestSimpleRetryPolicyCallbacks(t *testing.T) {
 		assertTrue(t, closed)
 	})
 }
+
+/* HELPER FUNCTIONS */
 func createRetryTemplate[T any](rp retryPolicy) RetryTemplate[T] {
 	context := retryContext{
 		count:     0,

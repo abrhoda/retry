@@ -4,9 +4,10 @@
 ## Features and TODO list
 
 - [x] `Simple` retry policy - retry X times
-- [ ] Context `onopen`, `onclose`, and `onerror` callback functions
-- [ ] `FixedBackoff` retry policy - retry every X milliseconds for a max of X ms (deafult=30000)
+- [x] Context `onopen`, `onclose`, and `onerror` callback functions
+- [x] `FixedBackoff` retry policy - retry every X milliseconds for a max of X ms (deafult=30000)
 - [ ] `ExponentialBackoff` retry policy - retry X milliseconds (default=100ms) initially and exponentially thereafter by multiplier Y (default=2 for100% increase) for a max of Z ms (default=30000) 
+- [ ] Channel to cancel `retryTemplate.execute` while operating.
 
 ## Getting started
 
