@@ -15,8 +15,8 @@ format: ## Format project using basic `go fmt`
 	@go fmt ./...
 
 .PHONY: help
-help: ## Print this help message (default goal)
+help: ## Print this help message
 	@awk -F ':|##' '/^[^\t].+?:.*?##/ {printf "\033[36m%-20s\033[0m %s\n", $$1, $$NF}' $(MAKEFILE_LIST)
 
 
-.DEFAULT_GOAL := help
+.DEFAULT_GOAL := build

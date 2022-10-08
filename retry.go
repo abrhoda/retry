@@ -91,3 +91,24 @@ func (srp SimpleRetryPolicy) delay() time.Duration {
 func (srp SimpleRetryPolicy) stop(rc *retryContext) bool {
 	return rc.count >= srp.MaxAttempts
 }
+
+/*
+Fixed Backoff Policy impl
+*/
+type FixedBackoffPolicy struct {
+	BackoffPeriod time.Duration
+	Limit         time.Duration
+}
+
+func (fbp FixedBackoffPolicy) delay() time.Duration {
+	return fbp.BackoffPeriod
+}
+
+func (fbp FixedBackoffPolicy) stop(rc *retryContext) bool {
+	// use a default limit if one is not provided
+	if fbp.Limit == 0 {
+		fbp.Limit = 30000
+	}
+
+	return (fbp.BackoffPeriod * time.Duration(rc.count)) >= fbp.Limit
+}
