@@ -40,6 +40,31 @@ func TestRetryTemplate(t *testing.T) {
 		assertErrorNotNil(t, err)
 	})
 
+	t.Run("Recv sets context state to closed on receiving signal", func(t *testing.T) {
+		signal := make(chan bool, 1)
+		maxAttempts := 100
+		policy := SimpleRetryPolicy{
+			MaxAttempts: maxAttempts,
+		}
+
+		template := createRetryTemplate[int](policy)
+		template.SetInterruptChannel(signal)
+
+		go func(ch chan bool) {
+			time.Sleep(250 * time.Millisecond)
+			signal <- true
+		}(signal)
+
+		template.Execute(
+			func() (int, error) {
+				time.Sleep(100 * time.Millisecond)
+				return 0, errors.New("")
+			},
+		)
+
+		assertEqual(t, template.rc.state, closed)
+		assertNotEqual(t, template.rc.count, maxAttempts)
+	})
 }
 
 func TestRetryContext(t *testing.T) {
@@ -93,6 +118,7 @@ func TestSimpleRetryPolicy(t *testing.T) {
 		context := retryContext{
 			count:     maxAttempts,
 			lastError: nil,
+			state:     opened,
 		}
 
 		stop := policy.stop(&context)
@@ -114,6 +140,23 @@ func TestSimpleRetryPolicy(t *testing.T) {
 
 		want := maxAttempts
 		assertEqual(t, template.rc.count, want)
+	})
+
+	t.Run("Stops when retryContext state is closed", func(t *testing.T) {
+		maxAttempts := 1
+		policy := SimpleRetryPolicy{
+			MaxAttempts: maxAttempts,
+		}
+
+		context := retryContext{
+			count:     maxAttempts,
+			lastError: nil,
+			state:     opened,
+		}
+
+		context.state = closed
+		stop := policy.stop(&context)
+		assertTrue(t, stop)
 	})
 }
 
@@ -138,6 +181,7 @@ func TestFixedBackoffPolicy(t *testing.T) {
 		context := retryContext{
 			count:     0,
 			lastError: nil,
+			state:     opened,
 		}
 
 		stop := policy.stop(&context)
@@ -157,10 +201,28 @@ func TestFixedBackoffPolicy(t *testing.T) {
 		context := retryContext{
 			count:     0,
 			lastError: nil,
+			state:     opened,
 		}
 
 		context.count = 30
 
+		stop := policy.stop(&context)
+		assertTrue(t, stop)
+	})
+
+	t.Run("Stops when retryContext state is closed", func(t *testing.T) {
+		delay := 1000 * time.Millisecond
+		policy := FixedBackoffPolicy{
+			BackoffPeriod: delay,
+		}
+
+		context := retryContext{
+			count:     0,
+			lastError: nil,
+			state:     opened,
+		}
+
+		context.state = closed
 		stop := policy.stop(&context)
 		assertTrue(t, stop)
 	})
@@ -193,7 +255,7 @@ func TestRetryTemplateCallbacks(t *testing.T) {
 		}
 
 		template := createRetryTemplate[int](policy)
-		template.setOnOpenCallback(openFunc)
+		template.SetOnOpenCallback(openFunc)
 		template.Execute(
 			func() (int, error) {
 				return 1, nil
@@ -216,7 +278,7 @@ func TestRetryTemplateCallbacks(t *testing.T) {
 		}
 
 		template := createRetryTemplate[int](policy)
-		template.setOnErrorCallback(errorFunc)
+		template.SetOnErrorCallback(errorFunc)
 		template.Execute(
 			func() (int, error) {
 				return 0, errors.New("Error from `Returns error`")
@@ -238,7 +300,7 @@ func TestRetryTemplateCallbacks(t *testing.T) {
 		}
 
 		template := createRetryTemplate[int](policy)
-		template.setOnCloseCallback(closeFunc)
+		template.SetOnCloseCallback(closeFunc)
 		template.Execute(
 			func() (int, error) {
 				return 1, nil
@@ -253,11 +315,13 @@ func createRetryTemplate[T any](rp retryPolicy) RetryTemplate[T] {
 	context := retryContext{
 		count:     0,
 		lastError: nil,
+		state:     opened,
 	}
 
 	return RetryTemplate[T]{
-		rp: rp,
-		rc: context,
+		rp:   rp,
+		rc:   &context,
+		recv: nil,
 	}
 }
 
@@ -278,6 +342,13 @@ func assertEqual[C comparable](t testing.TB, got C, want C) {
 	t.Helper()
 	if got != want {
 		t.Errorf("got not equal want")
+	}
+}
+
+func assertNotEqual[C comparable](t testing.TB, got C, want C) {
+	t.Helper()
+	if got == want {
+		t.Errorf("got equal want")
 	}
 }
 
