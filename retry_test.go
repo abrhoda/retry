@@ -55,7 +55,7 @@ func TestRetryTemplate(t *testing.T) {
 			signal <- true
 		}(signal)
 
-		template.Execute(
+    _, err := template.Execute(
 			func() (int, error) {
 				time.Sleep(100 * time.Millisecond)
 				return 0, errors.New("")
@@ -64,6 +64,7 @@ func TestRetryTemplate(t *testing.T) {
 
 		assertEqual(t, template.rc.state, closed)
 		assertNotEqual(t, template.rc.count, maxAttempts)
+    assertErrorNotNil(t, err)
 	})
 }
 
@@ -160,10 +161,10 @@ func TestSimpleRetryPolicy(t *testing.T) {
 	})
 }
 
-func TestFixedBackoffPolicy(t *testing.T) {
+func TestFixedBackoffRetryPolicy(t *testing.T) {
 	t.Run("Waits `BackoffPeriod` miliseconds between reties", func(t *testing.T) {
 		delay := 1000 * time.Millisecond
-		policy := FixedBackoffPolicy{
+		policy := FixedBackoffRetryPolicy{
 			BackoffPeriod: delay,
 			Limit:         30000 * time.Millisecond,
 		}
@@ -173,7 +174,7 @@ func TestFixedBackoffPolicy(t *testing.T) {
 
 	t.Run("Retries until Limit is reached", func(t *testing.T) {
 		delay := 1000 * time.Millisecond
-		policy := FixedBackoffPolicy{
+		policy := FixedBackoffRetryPolicy{
 			BackoffPeriod: delay,
 			Limit:         5000 * time.Millisecond,
 		}
@@ -194,7 +195,7 @@ func TestFixedBackoffPolicy(t *testing.T) {
 	})
 	t.Run("Uses a default `Limit` if none is set", func(t *testing.T) {
 		delay := 1000 * time.Millisecond
-		policy := FixedBackoffPolicy{
+		policy := FixedBackoffRetryPolicy{
 			BackoffPeriod: delay,
 		}
 
@@ -212,7 +213,7 @@ func TestFixedBackoffPolicy(t *testing.T) {
 
 	t.Run("Stops when retryContext state is closed", func(t *testing.T) {
 		delay := 1000 * time.Millisecond
-		policy := FixedBackoffPolicy{
+		policy := FixedBackoffRetryPolicy{
 			BackoffPeriod: delay,
 		}
 
@@ -312,15 +313,9 @@ func TestRetryTemplateCallbacks(t *testing.T) {
 
 /* HELPER FUNCTIONS */
 func createRetryTemplate[T any](rp retryPolicy) RetryTemplate[T] {
-	context := retryContext{
-		count:     0,
-		lastError: nil,
-		state:     opened,
-	}
-
 	return RetryTemplate[T]{
-		rp:   rp,
-		rc:   &context,
+		RetryPolicy:   rp,
+		rc:   nil,
 		recv: nil,
 	}
 }
