@@ -1,8 +1,8 @@
 # Retry
  - [Introduction](#Introduction)
  - [Examples](#Examples)
- - [Features and API](#Features-and-API)
- - [Features and TODO List](#Feature-and-TODO-List)
+ - [Public API](#Public-API)
+ - [Features and TODO List](#Features-and-TODO-List)
  - [Warning](#Warning)
  - [License](#License)
 
@@ -24,7 +24,7 @@ policy := SimpleRetryPolicy{
 resp, err := template.Execute(func () (int, error) { ... })
 ```
 
-## Features and API
+## Public API
 This section discusses the feautres of `retry` and it's public API.
 
 In order to add resilience and robustness to an application, especially in a distributed system, it is sometimes useful or even necessary to retry a failed operation in case a subsequent attempt would succeed. This could be due to a brief network outage causing a downstream service to not be reachable or a spontaneous burst of traffic overloading a database for a second. `retry` painlessly solves this issue with various configurable policies per template.
