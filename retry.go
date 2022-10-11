@@ -30,7 +30,7 @@ type retryPolicy interface {
 }
 
 type RetryTemplate[T any] struct {
-	rp      retryPolicy
+	RetryPolicy      retryPolicy
 	rc      *retryContext
 	onOpen  onOpenCallbackFunction
 	onClose onCloseCallbackFunction[T]
@@ -78,7 +78,7 @@ func (rt *RetryTemplate[T]) Execute(fn retryableFunction[T]) (T, error) {
 		}(rt.recv)
 	}
 
-	for !rt.rp.stop(rt.rc) {
+	for !rt.RetryPolicy.stop(rt.rc) {
 		rt.rc.count++
 
 		val, err = fn()
@@ -92,7 +92,7 @@ func (rt *RetryTemplate[T]) Execute(fn retryableFunction[T]) (T, error) {
 			rt.onError(err)
 		}
 
-		time.Sleep(rt.rp.delay())
+		time.Sleep(rt.RetryPolicy.delay())
 	}
 
 	if rt.onClose != nil {
@@ -114,7 +114,6 @@ func (srp SimpleRetryPolicy) delay() time.Duration {
 }
 
 func (srp SimpleRetryPolicy) stop(rc *retryContext) bool {
-	// check retryContextState
 	rc.mu.Lock()
 	current := rc.state
 	rc.mu.Unlock()
@@ -129,17 +128,16 @@ func (srp SimpleRetryPolicy) stop(rc *retryContext) bool {
 /*
 Fixed Backoff Policy impl
 */
-type FixedBackoffPolicy struct {
+type FixedBackoffRetryPolicy struct {
 	BackoffPeriod time.Duration
 	Limit         time.Duration
 }
 
-func (fbp FixedBackoffPolicy) delay() time.Duration {
+func (fbp FixedBackoffRetryPolicy) delay() time.Duration {
 	return fbp.BackoffPeriod
 }
 
-func (fbp FixedBackoffPolicy) stop(rc *retryContext) bool {
-	// check retryContextState
+func (fbp FixedBackoffRetryPolicy) stop(rc *retryContext) bool {
 	rc.mu.Lock()
 	current := rc.state
 	rc.mu.Unlock()

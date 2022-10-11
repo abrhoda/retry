@@ -26,7 +26,7 @@ jobs:
     - name: Format code
       run: make format
 
-    # Run vet (this runs as part of go test too - could be removed)
+    # Run vet (this runs as part of next step (make test) too - could be removed)
     - name: Run vet
       run: go vet ./...
       
