@@ -3,6 +3,7 @@ package retry
 import (
 	"sync"
 	"time"
+  "math"
 )
 
 type retryableFunction[T any] func() (T, error)
@@ -26,16 +27,16 @@ type retryContext struct {
 
 type retryPolicy interface {
 	stop(*retryContext) bool
-	delay() time.Duration
+	delay(*retryContext) time.Duration
 }
 
 type RetryTemplate[T any] struct {
-	RetryPolicy      retryPolicy
-	rc      *retryContext
-	onOpen  onOpenCallbackFunction
-	onClose onCloseCallbackFunction[T]
-	onError onErrorCallbackFunction
-	recv    <-chan bool
+	RetryPolicy retryPolicy
+	rc          *retryContext
+	onOpen      onOpenCallbackFunction
+	onClose     onCloseCallbackFunction[T]
+	onError     onErrorCallbackFunction
+	recv        <-chan bool
 }
 
 func (rt *RetryTemplate[T]) SetOnOpenCallback(fn onOpenCallbackFunction) {
@@ -80,7 +81,6 @@ func (rt *RetryTemplate[T]) Execute(fn retryableFunction[T]) (T, error) {
 
 	for !rt.RetryPolicy.stop(rt.rc) {
 		rt.rc.count++
-
 		val, err = fn()
 		if err == nil {
 			break
@@ -91,8 +91,8 @@ func (rt *RetryTemplate[T]) Execute(fn retryableFunction[T]) (T, error) {
 		if rt.onError != nil {
 			rt.onError(err)
 		}
-
-		time.Sleep(rt.RetryPolicy.delay())
+    delay := rt.RetryPolicy.delay(rt.rc)
+		time.Sleep(delay)
 	}
 
 	if rt.onClose != nil {
@@ -109,16 +109,14 @@ type SimpleRetryPolicy struct {
 	MaxAttempts int
 }
 
-func (srp SimpleRetryPolicy) delay() time.Duration {
+func (srp SimpleRetryPolicy) delay(rc *retryContext) time.Duration {
 	return 0
 }
 
 func (srp SimpleRetryPolicy) stop(rc *retryContext) bool {
-	rc.mu.Lock()
-	current := rc.state
-	rc.mu.Unlock()
+  // TODO require MaxAttempts
 
-	if current == closed {
+	if isContextClosed(rc) {
 		return true
 	}
 
@@ -133,23 +131,58 @@ type FixedBackoffRetryPolicy struct {
 	Limit         time.Duration
 }
 
-func (fbp FixedBackoffRetryPolicy) delay() time.Duration {
+func (fbp *FixedBackoffRetryPolicy) delay(rc *retryContext) time.Duration {
 	return fbp.BackoffPeriod
 }
 
-func (fbp FixedBackoffRetryPolicy) stop(rc *retryContext) bool {
-	rc.mu.Lock()
-	current := rc.state
-	rc.mu.Unlock()
+func (fbp *FixedBackoffRetryPolicy) stop(rc *retryContext) bool {
+  // TODO require Backoff period or provide default
 
-	if current == closed {
+	if isContextClosed(rc) {
 		return true
 	}
 
 	// use a default limit if one is not provided
 	if fbp.Limit == 0 {
-		fbp.Limit = 30000
+		fbp.Limit = 30000 * time.Millisecond
 	}
 
 	return (fbp.BackoffPeriod * time.Duration(rc.count)) >= fbp.Limit
+}
+
+/*
+Exponential Backoff Policy impl
+*/
+type ExponentialBackoffRetryPolicy struct {
+	InitialInterval time.Duration
+	Multiplier      float64
+	Limit           time.Duration
+}
+
+func (ebp ExponentialBackoffRetryPolicy) delay(rc *retryContext) time.Duration {
+  if ebp.Multiplier == 0 {
+    ebp.Multiplier = 2
+  }
+
+  if ebp.Limit == 0 {
+    ebp.Limit = 30000 * time.Millisecond
+  }
+
+  // TODO require an InitialInterval
+  next := ebp.InitialInterval * time.Duration(math.Pow(ebp.Multiplier, float64(rc.count-1)))
+
+  if next > ebp.Limit {
+    next = ebp.Limit
+  }
+  return next
+}
+
+func (ebp ExponentialBackoffRetryPolicy) stop(rc *retryContext) bool {
+	return isContextClosed(rc)
+}
+
+func isContextClosed(rc *retryContext) bool {
+	rc.mu.Lock()
+  defer rc.mu.Unlock()
+  return rc.state == closed
 }

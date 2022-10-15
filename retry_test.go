@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 	"time"
+  //"fmt"
 )
 
 func TestRetryTemplate(t *testing.T) {
@@ -109,6 +110,18 @@ func TestRetryContext(t *testing.T) {
 	})
 }
 
+func TestIsContextClosed(t *testing.T) {
+  t.Run("Returns the current retryContext.state", func(t *testing.T) {
+    context := retryContext{}
+    isOpened := isContextClosed(&context)
+    context.state = closed
+    isClosed := isContextClosed(&context)
+
+    assertFalse(t, isOpened)
+    assertTrue(t, isClosed)
+  })
+}
+
 func TestSimpleRetryPolicy(t *testing.T) {
 	t.Run("Sends stop boolean at maxAttempts", func(t *testing.T) {
 		maxAttempts := 1
@@ -169,7 +182,12 @@ func TestFixedBackoffRetryPolicy(t *testing.T) {
 			Limit:         30000 * time.Millisecond,
 		}
 
-		assertEqual(t, policy.delay(), delay)
+		context := retryContext{
+			count:     0,
+			lastError: nil,
+			state:     opened,
+		}
+		assertEqual(t, policy.delay(&context), delay)
 	})
 
 	t.Run("Retries until Limit is reached", func(t *testing.T) {
@@ -228,7 +246,93 @@ func TestFixedBackoffRetryPolicy(t *testing.T) {
 		assertTrue(t, stop)
 	})
 }
+func TestExponentialBackoffRetryPolicy(t *testing.T) {
+	t.Run("Has a default multiplier and limit if none are set", func(t *testing.T) {
+    interval := 500 * time.Millisecond
+    
+    policy := ExponentialBackoffRetryPolicy {
+      InitialInterval: interval,  
+    }
 
+		context := retryContext{
+			count:     0,
+			lastError: nil,
+			state:     opened,
+		}
+
+    context.count++
+    first := policy.delay(&context)
+    context.count++
+    second := policy.delay(&context)
+    context.count++
+    third := policy.delay(&context)
+    context.count++
+    fourth := policy.delay(&context)
+
+    context.count++ //8000
+    context.count++ //16000
+    context.count++ //32000
+    passedLimit := policy.delay(&context)
+
+    // calculated off interval*(multiplier^count) = 500, 1000, 2000, 4000
+    assertEqual(t, first, 500*time.Millisecond)
+    assertEqual(t, second, 1000*time.Millisecond)
+    assertEqual(t, third, 2000*time.Millisecond)
+    assertEqual(t, fourth, 4000*time.Millisecond)
+    assertEqual(t, passedLimit, 30000*time.Millisecond)
+  })
+
+	t.Run("Back off time is calculated as a function of (base*(multiplier^n))", func(t *testing.T) {
+    interval := 300 * time.Millisecond
+    multiplier := 3.0
+    
+    policy := ExponentialBackoffRetryPolicy {
+      InitialInterval: interval,  
+      Multiplier: multiplier,
+    }
+
+		context := retryContext{
+			count:     0,
+			lastError: nil,
+			state:     opened,
+		}
+
+    context.count++
+    first := policy.delay(&context)
+    context.count++
+    second := policy.delay(&context)
+    context.count++
+    third := policy.delay(&context)
+    context.count++
+    fourth := policy.delay(&context)
+
+    assertEqual(t, first, 300*time.Millisecond)
+    assertEqual(t, second, 900*time.Millisecond)
+    assertEqual(t, third, 2700*time.Millisecond)
+    assertEqual(t, fourth, 8100*time.Millisecond)
+
+  })
+
+  t.Run("Retries stop only when retryContextState is closed", func(t *testing.T) {
+    interval := 500 * time.Millisecond
+    
+    policy := ExponentialBackoffRetryPolicy {
+      InitialInterval: interval,  
+    }
+
+		context := retryContext{
+			state:     opened,
+		}
+    
+    openedShouldStop := policy.stop(&context)
+    context.state = closed
+    closedShouldStop := policy.stop(&context)
+
+    assertFalse(t, openedShouldStop)
+    assertTrue(t, closedShouldStop)
+
+  })
+}
 func TestRetryTemplateCallbacks(t *testing.T) {
 	t.Run("Pass through when no callbacks are set", func(t *testing.T) {
 		maxAttempts := 5
