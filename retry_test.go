@@ -245,9 +245,33 @@ func TestFixedBackoffRetryPolicy(t *testing.T) {
 		stop := policy.stop(&context)
 		assertTrue(t, stop)
 	})
+
+  t.Run("Delay no time when retryContextState is closed", func(t *testing.T) {
+		delay := 1000 * time.Millisecond
+		policy := FixedBackoffRetryPolicy{
+			BackoffPeriod: delay,
+		}
+
+		context := retryContext{
+			count:     0,
+			lastError: nil,
+			state:     opened,
+		}
+
+    context.count++
+
+    hasDelay := (0 < policy.delay(&context))
+    context.state = closed
+    hasNoDelay := (0 == policy.delay(&context))
+
+    
+    assertTrue(t, hasDelay)
+    assertTrue(t, hasNoDelay)
+
+  })
 }
 func TestExponentialBackoffRetryPolicy(t *testing.T) {
-	t.Run("Has a default multiplier and limit if none are set", func(t *testing.T) {
+	t.Run("Delay has a default multiplier and limit if none are set", func(t *testing.T) {
     interval := 500 * time.Millisecond
     
     policy := ExponentialBackoffRetryPolicy {
@@ -282,7 +306,7 @@ func TestExponentialBackoffRetryPolicy(t *testing.T) {
     assertEqual(t, passedLimit, 30000*time.Millisecond)
   })
 
-	t.Run("Back off time is calculated as a function of (base*(multiplier^n))", func(t *testing.T) {
+	t.Run("Delay back off time is calculated as a function of (base*(multiplier^n))", func(t *testing.T) {
     interval := 300 * time.Millisecond
     multiplier := 3.0
     
@@ -313,7 +337,7 @@ func TestExponentialBackoffRetryPolicy(t *testing.T) {
 
   })
 
-  t.Run("Retries stop only when retryContextState is closed", func(t *testing.T) {
+  t.Run("Stop only when retryContextState is closed", func(t *testing.T) {
     interval := 500 * time.Millisecond
     
     policy := ExponentialBackoffRetryPolicy {
@@ -330,6 +354,29 @@ func TestExponentialBackoffRetryPolicy(t *testing.T) {
 
     assertFalse(t, openedShouldStop)
     assertTrue(t, closedShouldStop)
+
+  })
+
+  t.Run("Delay no time when retryContextState is closed", func(t *testing.T) {
+    interval := 500 * time.Millisecond
+    
+    policy := ExponentialBackoffRetryPolicy {
+      InitialInterval: interval,  
+    }
+
+		context := retryContext{
+			state:     opened,
+		}
+
+    context.count++
+
+    hasDelay := (0 < policy.delay(&context))
+    context.state = closed
+    hasNoDelay := (0 == policy.delay(&context))
+
+    
+    assertTrue(t, hasDelay)
+    assertTrue(t, hasNoDelay)
 
   })
 }

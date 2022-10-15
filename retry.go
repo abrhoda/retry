@@ -132,6 +132,10 @@ type FixedBackoffRetryPolicy struct {
 }
 
 func (fbp *FixedBackoffRetryPolicy) delay(rc *retryContext) time.Duration {
+  if isContextClosed(rc) {
+    return 0
+  }
+
 	return fbp.BackoffPeriod
 }
 
@@ -160,6 +164,10 @@ type ExponentialBackoffRetryPolicy struct {
 }
 
 func (ebp ExponentialBackoffRetryPolicy) delay(rc *retryContext) time.Duration {
+  if isContextClosed(rc) {
+    return 0
+  }
+
   if ebp.Multiplier == 0 {
     ebp.Multiplier = 2
   }
