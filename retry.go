@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
   "math"
+  //"fmt"
 )
 
 type retryableFunction[T any] func() (T, error)
@@ -94,8 +95,8 @@ func (rt *RetryTemplate[T]) Execute(fn retryableFunction[T]) (T, error) {
     delay := rt.RetryPolicy.delay(rt.rc)
 		time.Sleep(delay)
 	}
-
-	if rt.onClose != nil {
+	
+  if rt.onClose != nil {
 		rt.onClose(val, err)
 	}
 
@@ -109,11 +110,11 @@ type SimpleRetryPolicy struct {
 	MaxAttempts int
 }
 
-func (srp SimpleRetryPolicy) delay(rc *retryContext) time.Duration {
+func (srp *SimpleRetryPolicy) delay(rc *retryContext) time.Duration {
 	return 0
 }
 
-func (srp SimpleRetryPolicy) stop(rc *retryContext) bool {
+func (srp *SimpleRetryPolicy) stop(rc *retryContext) bool {
   // TODO require MaxAttempts
 
 	if isContextClosed(rc) {
@@ -163,7 +164,7 @@ type ExponentialBackoffRetryPolicy struct {
 	Limit           time.Duration
 }
 
-func (ebp ExponentialBackoffRetryPolicy) delay(rc *retryContext) time.Duration {
+func (ebp *ExponentialBackoffRetryPolicy) delay(rc *retryContext) time.Duration {
   if isContextClosed(rc) {
     return 0
   }
@@ -185,7 +186,7 @@ func (ebp ExponentialBackoffRetryPolicy) delay(rc *retryContext) time.Duration {
   return next
 }
 
-func (ebp ExponentialBackoffRetryPolicy) stop(rc *retryContext) bool {
+func (ebp *ExponentialBackoffRetryPolicy) stop(rc *retryContext) bool {
 	return isContextClosed(rc)
 }
 
