@@ -188,7 +188,7 @@ Note that the function does not call `onClose` (if set) and return last `(T, err
 - [x] `ExponentialBackoff` retry policy - retry X milliseconds (default=100ms) initially and exponentially thereafter by multiplier Y (default=2 for 100% increase) for a max of Z ms (default=30000) 
 - [X] Channel to cancel `RetryTemplate.Execute` while operating.
 - [ ] Require value for `ExponentialBackoffRetryPolicy`'s `InitialInterval`, `FixedBackoffRetryPolicy`'s `BackoffPeriod`, and `SimpleRetryPolicy`'s `MaxAttempts`
-- [ ] Check `retryContext`'s `state` at the start of `Retrypolicy`'s `delay/1` to see if we can not delay and immediately stop for cases where the `state` was set to `closed` while the function was retrying
+- [x] Check `retryContext`'s `state` at the start of `Retrypolicy`'s `delay/1` to see if we can not delay and immediately stop for cases where the `state` was set to `closed` while the function was retrying
 
 ## Warning
 _This library leverages go 1.18 generics and is compatible with versions of go that support generics._

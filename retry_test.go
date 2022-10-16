@@ -14,7 +14,7 @@ func TestRetryTemplate(t *testing.T) {
 			MaxAttempts: maxAttempts,
 		}
 
-		template := createRetryTemplate[int](policy)
+		template := createRetryTemplate[int](&policy)
 		want := 1
 		got, err := template.Execute(
 			func() (int, error) {
@@ -31,7 +31,7 @@ func TestRetryTemplate(t *testing.T) {
 			MaxAttempts: maxAttempts,
 		}
 
-		template := createRetryTemplate[int](policy)
+		template := createRetryTemplate[int](&policy)
 		_, err := template.Execute(
 			func() (int, error) {
 				return 0, errors.New("Error from `Returns error`")
@@ -48,7 +48,7 @@ func TestRetryTemplate(t *testing.T) {
 			MaxAttempts: maxAttempts,
 		}
 
-		template := createRetryTemplate[int](policy)
+		template := createRetryTemplate[int](&policy)
 		template.SetInterruptChannel(signal)
 
 		go func(ch chan bool) {
@@ -76,7 +76,7 @@ func TestRetryContext(t *testing.T) {
 			MaxAttempts: maxAttempts,
 		}
 
-		template := createRetryTemplate[int](policy)
+		template := createRetryTemplate[int](&policy)
 
 		want_count := 3
 
@@ -98,7 +98,7 @@ func TestRetryContext(t *testing.T) {
 			MaxAttempts: maxAttempts,
 		}
 
-		template := createRetryTemplate[int](policy)
+		template := createRetryTemplate[int](&policy)
 
 		template.Execute(
 			func() (int, error) {
@@ -145,7 +145,7 @@ func TestSimpleRetryPolicy(t *testing.T) {
 			MaxAttempts: maxAttempts,
 		}
 
-		template := createRetryTemplate[int](srp)
+		template := createRetryTemplate[int](&srp)
 		template.Execute(
 			func() (int, error) {
 				return 0, errors.New("Error from `Returns error`")
@@ -387,7 +387,7 @@ func TestRetryTemplateCallbacks(t *testing.T) {
 			MaxAttempts: maxAttempts,
 		}
 
-		template := createRetryTemplate[int](policy)
+		template := createRetryTemplate[int](&policy)
 
 		assertCallbackNil[int](t, template.onOpen)
 		assertCallbackNil[int](t, template.onError)
@@ -406,7 +406,7 @@ func TestRetryTemplateCallbacks(t *testing.T) {
 			MaxAttempts: maxAttempts,
 		}
 
-		template := createRetryTemplate[int](policy)
+		template := createRetryTemplate[int](&policy)
 		template.SetOnOpenCallback(openFunc)
 		template.Execute(
 			func() (int, error) {
@@ -429,7 +429,7 @@ func TestRetryTemplateCallbacks(t *testing.T) {
 			MaxAttempts: maxAttempts,
 		}
 
-		template := createRetryTemplate[int](policy)
+		template := createRetryTemplate[int](&policy)
 		template.SetOnErrorCallback(errorFunc)
 		template.Execute(
 			func() (int, error) {
@@ -451,7 +451,7 @@ func TestRetryTemplateCallbacks(t *testing.T) {
 			MaxAttempts: maxAttempts,
 		}
 
-		template := createRetryTemplate[int](policy)
+		template := createRetryTemplate[int](&policy)
 		template.SetOnCloseCallback(closeFunc)
 		template.Execute(
 			func() (int, error) {
