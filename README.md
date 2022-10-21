@@ -194,4 +194,4 @@ Note that the function does not call `onClose` (if set) and return last `(T, err
 _This library leverages go 1.18 generics and is compatible with versions of go that support generics._
 
 ## License
-Distributed under the MIT license. See `LICENSE.txt` at project root for more information. 
+Distributed under the MIT license. See `LICENSE.md` at project root for more information. 
